@@ -1,34 +1,51 @@
 terraform {
   required_providers {
     docker = {
-      source  = "kreuzwerker/docker"
+      source = "kreuzwerker/docker"
+    }
+    random = {
+      source = "hashicorp/random"
     }
   }
-  required_version = "~>1.14.3" 
-}
-provider "docker" {}
-
-
-resource "random_password" "random_string" {
-  length      = 16
-  special     = false
-  min_upper   = 1
-  min_lower   = 1
-  min_numeric = 1
 }
 
-resource "docker_image" "nginx" {
-  name         = "hello-world"
+provider "docker" {
+  host = "ssh://${var.ssh_user}@${var.vm_public_ip}:22"
+}
+
+variable "vm_public_ip" { type = string }
+variable "ssh_user"     { type = string }
+
+resource "random_password" "mysql_root" {
+  length  = 16
+  special = false
+}
+
+resource "random_password" "mysql_user" {
+  length  = 16
+  special = false
+}
+
+resource "docker_image" "mysql" {
+  name         = "mysql:8"
   keep_locally = true
 }
 
-resource "docker_container" "nginx" {
-  image = docker_image.nginx.image_id
-  name  = "example_${random_password.random_string.result}"
+resource "docker_container" "mysql" {
+  name  = "example_${random_password.mysql_user.result}"
+  image = docker_image.mysql.image_id
 
   ports {
-    internal = 80
-    external = 9090
+    internal = 3306
+    external = 3306
+    ip       = "127.0.0.1"
   }
-}
 
+  env = [
+    "MYSQL_ROOT_PASSWORD=${random_password.mysql_root.result}",
+    "MYSQL_DATABASE=wordpress",
+    "MYSQL_USER=wordpress",
+    "MYSQL_PASSWORD=${random_password.mysql_user.result}",
+    "MYSQL_ROOT_HOST=%",
+  ]
+}
